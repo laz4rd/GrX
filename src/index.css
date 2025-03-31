@@ -53,7 +53,7 @@
   }
 
   .chat-bubble-user {
-    @apply rounded-2xl rounded-br-sm bg-nothing-white text-nothing-black px-4 py-2 max-w-[80%] animate-slide-in;
+    @apply rounded-2xl rounded-br-sm bg-nothing-red text-nothing-white px-4 py-2 max-w-[80%] animate-slide-in;
   }
 
   .chat-bubble-other {
