@@ -59,7 +59,7 @@ export default {
 					gray: '#333333',
 					lightgray: '#666666',
 					white: '#FFFFFF',
-					red: '#FF3B30',
+					red: '#FF0000',
 				}
 			},
 			borderRadius: {

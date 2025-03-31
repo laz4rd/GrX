@@ -1,4 +1,6 @@
+
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import ChatHeader from './ChatHeader';
 import ChatMessage, { Message } from './ChatMessage';
 import ChatInput from './ChatInput';
@@ -47,6 +49,8 @@ const ChatView: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { contactId } = useParams();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,6 +59,10 @@ const ChatView: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]);
+
+  const handleBack = () => {
+    navigate('/contacts');
+  };
 
   const handleSendMessage = (content: string) => {
     const newMessage: Message = {
@@ -114,6 +122,7 @@ const ChatView: React.FC = () => {
       <ChatHeader 
         name="Alex"
         status="online"
+        onBack={handleBack}
       />
       
       <div className="flex-1 overflow-y-auto p-4">
