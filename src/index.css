@@ -59,10 +59,6 @@
   .chat-bubble-other {
     @apply rounded-2xl rounded-bl-sm bg-nothing-darkgray text-nothing-white px-4 py-2 max-w-[80%] animate-slide-in;
   }
-
-  .chat-bubble-highlight {
-    @apply rounded-2xl rounded-bl-sm bg-nothing-red text-nothing-white px-4 py-2 max-w-[80%] animate-slide-in;
-  }
   
   .typing-indicator {
     @apply flex space-x-1;

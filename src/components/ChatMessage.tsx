@@ -9,7 +9,6 @@ export interface Message {
   sender: 'user' | 'other';
   timestamp: Date;
   read: boolean;
-  highlighted?: boolean;
 }
 
 interface ChatMessageProps {
@@ -26,7 +25,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
     )}>
       <div
         className={cn(
-          message.highlighted ? "chat-bubble-highlight" : 
           isUser ? "chat-bubble-user" : "chat-bubble-other"
         )}
       >

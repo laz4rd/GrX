@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import ChatHeader from './ChatHeader';
 import ChatMessage, { Message } from './ChatMessage';
@@ -41,7 +40,6 @@ const initialMessages: Message[] = [
     sender: 'other',
     timestamp: new Date(Date.now() - 60000 * 5),
     read: true,
-    highlighted: true,
   },
 ];
 
