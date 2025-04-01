@@ -197,7 +197,7 @@ const Contacts = () => {
     }
   };
 
-  const filteredContacts = contacts.filter(contact =>
+  const filteredContacts = contacts.filter(contact => 
     contact.profile.username.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -243,20 +243,30 @@ const Contacts = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {filteredContacts.map(contact => (
-          <Button
-            key={contact.id}
-            variant="ghost"
-            className="flex items-center justify-start w-full p-4 hover:bg-nothing-darkgray text-nothing-white"
-            onClick={() => navigate(`/chat/${contact.contact_id}`)}
-          >
-            <Avatar className="mr-4">
-              <AvatarImage src={contact.profile.avatar_url || ''} />
-              <AvatarFallback>{contact.profile.username.charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <span>{contact.profile.username}</span>
-          </Button>
-        ))}
+        {filteredContacts.length > 0 ? (
+          filteredContacts.map(contact => (
+            <Button
+              key={contact.id}
+              variant="ghost"
+              className="flex items-center justify-start w-full p-4 hover:bg-nothing-darkgray text-nothing-white"
+              onClick={() => navigate(`/chat/${contact.contact_id}`)}
+            >
+              <Avatar className="mr-4">
+                <AvatarImage src={contact.profile.avatar_url || ''} />
+                <AvatarFallback>{contact.profile.username.charAt(0).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <span>{contact.profile.username}</span>
+            </Button>
+          ))
+        ) : search ? (
+          <div className="text-center p-4 text-nothing-white">
+            No contacts found matching "{search}"
+          </div>
+        ) : (
+          <div className="text-center p-4 text-nothing-white">
+            You have no contacts yet. Add contacts using the edit button.
+          </div>
+        )}
       </div>
 
       <Dialog open={showAddContact} onOpenChange={setShowAddContact}>
