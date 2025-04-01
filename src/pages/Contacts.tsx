@@ -80,24 +80,46 @@ const Contacts = () => {
 
   const fetchContacts = async () => {
     try {
-      const { data, error } = await supabase
+      // First get all contacts for the current user
+      const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
-        .select(`
-          *,
-          profile:profiles!inner(*)
-        `)
+        .select('*')
         .eq('user_id', user?.id);
 
-      if (error) throw error;
-
-      if (data) {
-        const formattedContacts = data.map(contact => ({
-          ...contact,
-          profile: contact.profile as Profile,
-        }));
-
-        setContacts(formattedContacts);
+      if (contactsError) throw contactsError;
+      
+      if (!contactsData || contactsData.length === 0) {
+        setContacts([]);
+        return;
       }
+      
+      // Then get the profile information for each contact
+      const contactsWithProfiles = await Promise.all(
+        contactsData.map(async (contact) => {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', contact.contact_id)
+            .single();
+            
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+            return null;
+          }
+          
+          return {
+            ...contact,
+            profile: profileData as Profile
+          };
+        })
+      );
+      
+      // Filter out any null results (failed profile fetches)
+      const validContacts = contactsWithProfiles.filter(
+        (contact): contact is ContactWithProfile => contact !== null
+      );
+      
+      setContacts(validContacts);
     } catch (error: any) {
       console.error('Error fetching contacts:', error);
       toast.error('Could not load contacts');
