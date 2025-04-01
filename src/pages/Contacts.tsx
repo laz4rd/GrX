@@ -23,7 +23,7 @@ interface ContactWithProfile {
   id: string;
   contact_id: string;
   user_id: string;
-  created_at?: string;
+  created_at: string | null;
   profile: Profile;
 }
 
