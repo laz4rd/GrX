@@ -9,7 +9,108 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      contacts: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          read: boolean | null
+          receiver_id: string
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          read?: boolean | null
+          receiver_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          read?: boolean | null
+          receiver_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          related_entity_id: string | null
+          related_user_id: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          related_entity_id?: string | null
+          related_user_id?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          related_entity_id?: string | null
+          related_user_id?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          id: string
+          updated_at: string | null
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          id: string
+          updated_at?: string | null
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          id?: string
+          updated_at?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

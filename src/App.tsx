@@ -10,6 +10,8 @@ import SplashScreen from "./components/SplashScreen";
 import Login from "./pages/Login";
 import Contacts from "./pages/Contacts";
 import ChatView from "./components/ChatView";
+import { AuthProvider } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -19,15 +21,25 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<SplashScreen />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="/chat/:contactId" element={<ChatView />} />
-          <Route path="/home" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<SplashScreen />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/contacts" element={
+              <ProtectedRoute>
+                <Contacts />
+              </ProtectedRoute>
+            } />
+            <Route path="/chat/:contactId" element={
+              <ProtectedRoute>
+                <ChatView />
+              </ProtectedRoute>
+            } />
+            <Route path="/home" element={<Index />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

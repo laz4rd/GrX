@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Contact } from '@/models/Contact';
+import { Contact, Profile } from '@/models/Contact';
 import { Button } from '@/components/ui/button';
 import { Plus, User, Search, LogOut, MoreVertical } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -15,81 +15,210 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-
-// Sample data
-const initialContacts: Contact[] = [
-  {
-    id: '1',
-    name: 'Alex Johnson',
-    status: 'online',
-    lastMessage: 'See you tomorrow!',
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 30),
-    unreadCount: 0,
-    bio: 'Software developer interested in AI and machine learning.',
-    email: 'alex@example.com',
-  },
-  {
-    id: '2',
-    name: 'Sam Taylor',
-    status: 'away',
-    lastMessage: 'Can we talk later?',
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 180),
-    unreadCount: 2,
-    bio: 'Product manager and coffee enthusiast.',
-    email: 'sam@example.com',
-  },
-  {
-    id: '3',
-    name: 'Jordan Lee',
-    status: 'offline',
-    lastMessage: 'Thanks for the help!',
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 12),
-    unreadCount: 0,
-    bio: 'Photographer and traveler.',
-    email: 'jordan@example.com',
-  },
-];
-
-// All users in the system
-const allUsers: Contact[] = [
-  ...initialContacts,
-  {
-    id: '4',
-    name: 'Taylor Morgan',
-    status: 'online',
-    bio: 'Designer and illustrator based in NYC.',
-    email: 'taylor@example.com',
-  },
-  {
-    id: '5',
-    name: 'Morgan Smith',
-    status: 'offline',
-    bio: 'Musician and audio engineer.',
-    email: 'morgan@example.com',
-  },
-  {
-    id: '6',
-    name: 'Jessie Patel',
-    status: 'away',
-    bio: 'Digital marketer specializing in SEO.',
-    email: 'jessie@example.com',
-  },
-];
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const Contacts: React.FC = () => {
-  const [contacts, setContacts] = useState<Contact[]>(initialContacts);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [allUsers, setAllUsers] = useState<Profile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<Contact[]>([]);
-  const [selectedUser, setSelectedUser] = useState<Contact | null>(null);
+  const [searchResults, setSearchResults] = useState<Profile[]>([]);
+  const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<{[key: string]: number}>({});
+  const [lastMessages, setLastMessages] = useState<{[key: string]: {text: string, time: Date}}>({});
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  // Fetch contacts and all users
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchContacts = async () => {
+      try {
+        const { data: contactsData, error: contactsError } = await supabase
+          .from('contacts')
+          .select('contact_id')
+          .eq('user_id', user.id);
+          
+        if (contactsError) throw contactsError;
+        
+        if (contactsData && contactsData.length > 0) {
+          const contactIds = contactsData.map(c => c.contact_id);
+          
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', contactIds);
+            
+          if (profilesError) throw profilesError;
+          
+          if (profilesData) {
+            const formattedContacts: Contact[] = profilesData.map(profile => ({
+              id: profile.id,
+              name: profile.username,
+              status: 'offline', // Default status
+              avatar: profile.avatar_url,
+              email: profile.username, // Using username as email for display
+            }));
+            
+            setContacts(formattedContacts);
+            
+            // Fetch last messages and unread counts for each contact
+            fetchLastMessages(formattedContacts);
+            fetchUnreadCounts(formattedContacts);
+          }
+        }
+      } catch (error: any) {
+        console.error('Error fetching contacts:', error);
+        toast.error('Could not load your contacts');
+      }
+    };
+    
+    const fetchAllUsers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('id', user.id);
+          
+        if (error) throw error;
+        
+        if (data) {
+          setAllUsers(data);
+        }
+      } catch (error: any) {
+        console.error('Error fetching users:', error);
+      }
+    };
+    
+    fetchContacts();
+    fetchAllUsers();
+    
+    // Set up real-time listeners for new messages
+    const messagesChannel = supabase
+      .channel('public:messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const senderId = payload.new.sender_id;
+          
+          // Update unread count
+          setUnreadCounts(prev => ({
+            ...prev,
+            [senderId]: (prev[senderId] || 0) + 1,
+          }));
+          
+          // Update last message
+          setLastMessages(prev => ({
+            ...prev,
+            [senderId]: {
+              text: payload.new.content,
+              time: new Date(payload.new.created_at),
+            },
+          }));
+          
+          // Show notification
+          toast(`New message from ${senderId}`);
+        }
+      )
+      .subscribe();
+      
+    // Set up real-time listeners for notifications
+    const notificationsChannel = supabase
+      .channel('public:notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          toast(payload.new.content);
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(notificationsChannel);
+    };
+  }, [user]);
+  
+  // Fetch last messages for each contact
+  const fetchLastMessages = async (contactsList: Contact[]) => {
+    if (!user || contactsList.length === 0) return;
+    
+    const newLastMessages: {[key: string]: {text: string, time: Date}} = {};
+    
+    for (const contact of contactsList) {
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+          .or(`sender_id.eq.${contact.id},receiver_id.eq.${contact.id}`)
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          newLastMessages[contact.id] = {
+            text: data[0].content,
+            time: new Date(data[0].created_at),
+          };
+        }
+      } catch (error) {
+        console.error(`Error fetching last message for contact ${contact.id}:`, error);
+      }
+    }
+    
+    setLastMessages(newLastMessages);
+  };
+  
+  // Fetch unread message counts for each contact
+  const fetchUnreadCounts = async (contactsList: Contact[]) => {
+    if (!user || contactsList.length === 0) return;
+    
+    const newUnreadCounts: {[key: string]: number} = {};
+    
+    for (const contact of contactsList) {
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact' })
+          .eq('sender_id', contact.id)
+          .eq('receiver_id', user.id)
+          .eq('read', false);
+          
+        if (error) throw error;
+        
+        if (data) {
+          newUnreadCounts[contact.id] = data.length;
+        }
+      } catch (error) {
+        console.error(`Error fetching unread count for contact ${contact.id}:`, error);
+      }
+    }
+    
+    setUnreadCounts(newUnreadCounts);
+  };
 
   const handleSearch = (term: string) => {
     setSearchTerm(term);
     if (term.trim()) {
       const results = allUsers.filter(
-        user => 
-          !contacts.some(contact => contact.id === user.id) && 
-          user.name.toLowerCase().includes(term.toLowerCase())
+        profile => 
+          !contacts.some(contact => contact.id === profile.id) && 
+          profile.username.toLowerCase().includes(term.toLowerCase())
       );
       setSearchResults(results);
     } else {
@@ -97,12 +226,53 @@ const Contacts: React.FC = () => {
     }
   };
 
-  const addContact = (user: Contact) => {
-    if (!contacts.some(contact => contact.id === user.id)) {
-      setContacts([...contacts, user]);
+  const addContact = async (profile: Profile) => {
+    if (!user) return;
+    
+    try {
+      // Check if contact already exists
+      if (contacts.some(contact => contact.id === profile.id)) {
+        toast.info(`${profile.username} is already in your contacts.`);
+        return;
+      }
+      
+      // Add contact to database
+      const { error } = await supabase
+        .from('contacts')
+        .insert({
+          user_id: user.id,
+          contact_id: profile.id,
+        });
+        
+      if (error) throw error;
+      
+      // Add contact to state
+      const newContact: Contact = {
+        id: profile.id,
+        name: profile.username,
+        status: 'offline',
+        avatar: profile.avatar_url,
+        email: profile.username,
+      };
+      
+      setContacts(prev => [...prev, newContact]);
       setSearchTerm('');
       setSearchResults([]);
-      toast.success(`${user.name} added to your contacts.`);
+      toast.success(`${profile.username} added to your contacts.`);
+      
+      // Add notification for the contact
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: profile.id,
+          type: 'contact_request',
+          content: `${user.email} added you as a contact`,
+          related_user_id: user.id,
+        });
+        
+    } catch (error: any) {
+      console.error('Error adding contact:', error);
+      toast.error('Failed to add contact');
     }
   };
 
@@ -115,14 +285,27 @@ const Contacts: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // In a real app, you would sign out the user here
-    toast.success('Logged out successfully');
-    navigate('/login');
+    signOut();
   };
 
-  const blockContact = (contact: Contact) => {
-    setContacts(contacts.filter(c => c.id !== contact.id));
-    toast.success(`${contact.name} has been blocked`);
+  const blockContact = async (contact: Contact) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('contact_id', contact.id);
+        
+      if (error) throw error;
+      
+      setContacts(contacts.filter(c => c.id !== contact.id));
+      toast.success(`${contact.name} has been blocked`);
+    } catch (error: any) {
+      console.error('Error blocking contact:', error);
+      toast.error('Failed to block contact');
+    }
   };
 
   const reportContact = (contact: Contact) => {
@@ -170,12 +353,12 @@ const Contacts: React.FC = () => {
                 />
                 <div className="space-y-2 max-h-[60vh] overflow-y-auto">
                   {searchResults.length > 0 ? (
-                    searchResults.map(user => (
-                      <div key={user.id} className="p-3 bg-nothing-darkgray rounded-md flex justify-between items-center">
+                    searchResults.map(profile => (
+                      <div key={profile.id} className="p-3 bg-nothing-darkgray rounded-md flex justify-between items-center">
                         <div className="flex items-center gap-3">
                           <Avatar>
-                            {user.avatar ? (
-                              <AvatarImage src={user.avatar} alt={user.name} />
+                            {profile.avatar_url ? (
+                              <AvatarImage src={profile.avatar_url} alt={profile.username} />
                             ) : (
                               <AvatarFallback className="bg-nothing-gray">
                                 <User size={18} className="text-nothing-white" />
@@ -183,10 +366,7 @@ const Contacts: React.FC = () => {
                             )}
                           </Avatar>
                           <div>
-                            <p className="text-nothing-white font-medium">{user.name}</p>
-                            {user.bio && (
-                              <p className="text-nothing-lightgray text-xs truncate">{user.bio}</p>
-                            )}
+                            <p className="text-nothing-white font-medium">{profile.username}</p>
                           </div>
                         </div>
                         <Dialog>
@@ -194,7 +374,7 @@ const Contacts: React.FC = () => {
                             <Button 
                               variant="secondary" 
                               size="sm"
-                              onClick={() => setSelectedUser(user)}
+                              onClick={() => setSelectedUser(profile)}
                             >
                               View
                             </Button>
@@ -206,8 +386,8 @@ const Contacts: React.FC = () => {
                               </DialogHeader>
                               <div className="flex flex-col items-center gap-4 py-4">
                                 <Avatar className="h-24 w-24">
-                                  {selectedUser.avatar ? (
-                                    <AvatarImage src={selectedUser.avatar} alt={selectedUser.name} />
+                                  {selectedUser.avatar_url ? (
+                                    <AvatarImage src={selectedUser.avatar_url} alt={selectedUser.username} />
                                   ) : (
                                     <AvatarFallback className="bg-nothing-gray">
                                       <User size={36} className="text-nothing-white" />
@@ -215,19 +395,8 @@ const Contacts: React.FC = () => {
                                   )}
                                 </Avatar>
                                 <div className="text-center">
-                                  <h3 className="text-xl font-bold text-nothing-white">{selectedUser.name}</h3>
-                                  <p className="text-nothing-lightgray">{selectedUser.email}</p>
-                                  <div className={`inline-block px-2 py-1 rounded-full text-xs mt-2 ${
-                                    selectedUser.status === 'online' ? 'bg-nothing-red/20 text-nothing-red' : 
-                                    selectedUser.status === 'away' ? 'bg-yellow-500/20 text-yellow-500' : 
-                                    'bg-nothing-lightgray/20 text-nothing-lightgray'
-                                  }`}>
-                                    {selectedUser.status || 'offline'}
-                                  </div>
+                                  <h3 className="text-xl font-bold text-nothing-white">{selectedUser.username}</h3>
                                 </div>
-                                {selectedUser.bio && (
-                                  <p className="text-nothing-white text-center mt-2">{selectedUser.bio}</p>
-                                )}
                               </div>
                               <DialogFooter>
                                 <Button 
@@ -237,7 +406,7 @@ const Contacts: React.FC = () => {
                                     openChat(selectedUser.id);
                                   }}
                                 >
-                                  Message
+                                  Add & Message
                                 </Button>
                               </DialogFooter>
                             </DialogContent>
@@ -296,23 +465,23 @@ const Contacts: React.FC = () => {
               <div className="flex-1" onClick={() => openChat(contact.id)}>
                 <div className="flex justify-between">
                   <span className="text-nothing-white font-medium">{contact.name}</span>
-                  {contact.lastMessageTime && (
+                  {lastMessages[contact.id] && (
                     <span className="text-nothing-lightgray text-xs">
-                      {formatTimeString(contact.lastMessageTime)}
+                      {formatTimeString(lastMessages[contact.id].time)}
                     </span>
                   )}
                 </div>
                 
-                {contact.lastMessage && (
+                {lastMessages[contact.id] && (
                   <div className="flex justify-between items-center mt-1">
                     <span className="text-nothing-lightgray text-sm truncate pr-2">
-                      {contact.lastMessage}
+                      {lastMessages[contact.id].text}
                     </span>
-                    {contact.unreadCount && contact.unreadCount > 0 ? (
+                    {unreadCounts[contact.id] > 0 && (
                       <div className="bg-nothing-red text-nothing-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {contact.unreadCount}
+                        {unreadCounts[contact.id]}
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 )}
               </div>
@@ -342,7 +511,7 @@ const Contacts: React.FC = () => {
           ))
         ) : (
           <div className="text-center p-8 text-nothing-lightgray">
-            No contacts found
+            {contacts.length === 0 ? "No contacts yet. Search for users to add." : "No contacts found"}
           </div>
         )}
       </div>

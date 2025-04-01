@@ -2,59 +2,129 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ChatHeader from './ChatHeader';
-import ChatMessage, { Message } from './ChatMessage';
+import ChatMessage, { Message as UIMessage } from './ChatMessage';
 import ChatInput from './ChatInput';
 import TypingIndicator from './TypingIndicator';
-
-// Dummy data for initial messages
-const initialMessages: Message[] = [
-  {
-    id: '1',
-    content: 'Hey there!',
-    sender: 'other',
-    timestamp: new Date(Date.now() - 60000 * 15),
-    read: true,
-  },
-  {
-    id: '2',
-    content: 'Hi! How are you doing today?',
-    sender: 'user',
-    timestamp: new Date(Date.now() - 60000 * 14),
-    read: true,
-  },
-  {
-    id: '3',
-    content: 'I\'m doing great! Just checking out this new chat app. The design is really sleek.',
-    sender: 'other',
-    timestamp: new Date(Date.now() - 60000 * 10),
-    read: true,
-  },
-  {
-    id: '4',
-    content: 'Yeah, I love the minimalist Nothing OS inspired design. The animations are so smooth!',
-    sender: 'user',
-    timestamp: new Date(Date.now() - 60000 * 8),
-    read: true,
-  },
-  {
-    id: '5',
-    content: 'The high contrast makes it really easy to read. And these red accents are 🔥',
-    sender: 'other',
-    timestamp: new Date(Date.now() - 60000 * 5),
-    read: true,
-  },
-];
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Message, Profile } from '@/models/Contact';
 
 const ChatView: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [contactProfile, setContactProfile] = useState<Profile | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { contactId } = useParams();
+  const { user } = useAuth();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    if (!contactId || !user) return;
+
+    const fetchContactProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', contactId)
+          .single();
+
+        if (error) throw error;
+        if (data) setContactProfile(data);
+      } catch (error: any) {
+        console.error('Error fetching contact profile:', error);
+        toast.error('Could not load contact information');
+      }
+    };
+
+    const fetchMessages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+          .or(`sender_id.eq.${contactId},receiver_id.eq.${contactId}`)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        
+        if (data) {
+          const formattedMessages: UIMessage[] = data.map((msg: Message) => ({
+            id: msg.id,
+            content: msg.content,
+            sender: msg.sender_id === user.id ? 'user' : 'other',
+            timestamp: new Date(msg.created_at),
+            read: msg.read,
+          }));
+          
+          setMessages(formattedMessages);
+          
+          // Mark messages as read
+          const unreadMessageIds = data
+            .filter((msg: Message) => !msg.read && msg.receiver_id === user.id)
+            .map((msg: Message) => msg.id);
+            
+          if (unreadMessageIds.length > 0) {
+            await supabase
+              .from('messages')
+              .update({ read: true })
+              .in('id', unreadMessageIds);
+          }
+        }
+      } catch (error: any) {
+        console.error('Error fetching messages:', error);
+        toast.error('Could not load messages');
+      }
+    };
+
+    fetchContactProfile();
+    fetchMessages();
+
+    // Subscribe to new messages
+    const channel = supabase
+      .channel('public:messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `sender_id=eq.${contactId}`,
+        },
+        async (payload) => {
+          const newMessage = payload.new as Message;
+          
+          if (newMessage.receiver_id === user.id) {
+            // Mark message as read immediately
+            await supabase
+              .from('messages')
+              .update({ read: true })
+              .eq('id', newMessage.id);
+              
+            setMessages(prev => [
+              ...prev,
+              {
+                id: newMessage.id,
+                content: newMessage.content,
+                sender: 'other',
+                timestamp: new Date(newMessage.created_at),
+                read: true,
+              },
+            ]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [contactId, user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -64,64 +134,59 @@ const ChatView: React.FC = () => {
     navigate('/contacts');
   };
 
-  const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      sender: 'user',
-      timestamp: new Date(),
-      read: false,
-    };
+  const handleSendMessage = async (content: string) => {
+    if (!user || !contactId) return;
     
-    setMessages(prev => [...prev, newMessage]);
-    
-    // Simulate typing and response
-    setTimeout(() => setIsTyping(true), 1000);
-    
-    setTimeout(() => {
+    try {
       setIsTyping(false);
       
-      const responseMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: getResponseForMessage(content),
-        sender: 'other',
+      // Insert message into database
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: user.id,
+          receiver_id: contactId,
+          content,
+          read: false,
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // Add message to UI
+      const newMessage: UIMessage = {
+        id: data.id,
+        content,
+        sender: 'user',
         timestamp: new Date(),
-        read: true,
+        read: false,
       };
       
-      setMessages(prev => [...prev, responseMessage]);
+      setMessages(prev => [...prev, newMessage]);
       
-      // Mark user message as read
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === newMessage.id ? { ...msg, read: true } : msg
-        )
-      );
-    }, 3000);
-  };
-
-  // Simple function to generate responses
-  const getResponseForMessage = (message: string): string => {
-    const responses = [
-      "That's interesting!",
-      "I see what you mean.",
-      "Tell me more about that.",
-      "I'm not sure I follow. Could you explain?",
-      "That makes sense to me.",
-      "Hmm, I never thought about it that way.",
-      "I completely agree with you!",
-      "That's a great point.",
-      "I'm glad you brought that up."
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
+      // Create notification for recipient
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: contactId,
+          type: 'message',
+          content: `New message from ${user.email}`,
+          related_user_id: user.id,
+          related_entity_id: data.id,
+        });
+        
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    }
   };
 
   return (
     <div className="flex flex-col h-screen max-h-screen bg-nothing-black overflow-hidden dot-matrix">
       <ChatHeader 
-        name="Alex"
-        status="online"
+        name={contactProfile?.username || 'Loading...'}
+        status={contactProfile ? 'online' : 'offline'}
         onBack={handleBack}
       />
       
