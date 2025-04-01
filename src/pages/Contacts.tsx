@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -9,22 +10,25 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Edit, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Contact as IContact, Profile } from '@/models/Contact';
+import { Profile } from '@/models/Contact';
 
-interface Contact extends IContact {
+interface ContactWithProfile {
+  id: string;
+  contact_id: string;
+  user_id: string;
+  created_at?: string;
   profile: Profile;
 }
 
 const Contacts = () => {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<ContactWithProfile[]>([]);
   const [search, setSearch] = useState('');
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContactEmail, setNewContactEmail] = useState('');
@@ -38,7 +42,41 @@ const Contacts = () => {
     }
 
     fetchContacts();
-  }, [user, navigate]);
+
+    // Subscribe to new messages for notifications
+    const channel = supabase
+      .channel('public:messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const message = payload.new as any;
+          
+          // Show notification if message is sent to current user
+          if (message.receiver_id === user.id && !window.location.pathname.includes(`/chat/${message.sender_id}`)) {
+            // Find the contact name
+            const contact = contacts.find(c => c.contact_id === message.sender_id);
+            const contactName = contact?.profile.username || 'Someone';
+            
+            toast.info(`New message from ${contactName}`, {
+              action: {
+                label: "View",
+                onClick: () => navigate(`/chat/${message.sender_id}`),
+              },
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, navigate, contacts]);
 
   const fetchContacts = async () => {
     try {
@@ -46,20 +84,20 @@ const Contacts = () => {
         .from('contacts')
         .select(`
           *,
-          profiles (
-            *
-          )
+          profile:profiles!inner(*)
         `)
         .eq('user_id', user?.id);
 
       if (error) throw error;
 
-      const formattedContacts = data.map(contact => ({
-        ...contact,
-        profile: contact.profiles,
-      })) as unknown as Contact[];
+      if (data) {
+        const formattedContacts = data.map(contact => ({
+          ...contact,
+          profile: contact.profile as Profile,
+        }));
 
-      setContacts(formattedContacts);
+        setContacts(formattedContacts);
+      }
     } catch (error: any) {
       console.error('Error fetching contacts:', error);
       toast.error('Could not load contacts');
@@ -72,26 +110,36 @@ const Contacts = () => {
 
   const handleAddContact = async () => {
     try {
-      const { data: newContact, error: userError } = await supabase
+      // First, find the profile by email
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('email', newContactEmail)
+        .eq('username', newContactEmail)
         .single();
 
-      if (userError) throw userError;
-
-      if (!newContact) {
-        toast.error('User with this email not found.');
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          toast.error('User with this email or username not found.');
+        } else {
+          throw profileError;
+        }
         return;
       }
 
-      if (newContact.id === user?.id) {
+      const newProfile = profileData as Profile;
+
+      if (!newProfile) {
+        toast.error('User with this email or username not found.');
+        return;
+      }
+
+      if (newProfile.id === user?.id) {
         toast.error('You can\'t add yourself as a contact.');
         return;
       }
 
       const existingContact = contacts.find(
-        contact => contact.contact_id === newContact.id
+        contact => contact.contact_id === newProfile.id
       );
 
       if (existingContact) {
@@ -102,7 +150,7 @@ const Contacts = () => {
       const { error } = await supabase.from('contacts').insert([
         {
           user_id: user?.id,
-          contact_id: newContact.id,
+          contact_id: newProfile.id,
         },
       ]);
 
@@ -194,17 +242,17 @@ const Contacts = () => {
           <DialogHeader>
             <DialogTitle>Add New Contact</DialogTitle>
             <DialogDescription>
-              Enter the email address of the user you want to add as a contact.
+              Enter the username of the user you want to add as a contact.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
+              <Label htmlFor="username" className="text-right">
+                Username
               </Label>
               <Input
-                type="email"
-                id="email"
+                type="text"
+                id="username"
                 value={newContactEmail}
                 onChange={e => setNewContactEmail(e.target.value)}
                 className="col-span-3 bg-nothing-darkgray border-nothing-gray text-nothing-white"

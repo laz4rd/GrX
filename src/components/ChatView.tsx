@@ -53,7 +53,7 @@ const ChatView: React.FC = () => {
           .single();
 
         if (error) throw error;
-        if (data) setContactProfile(data);
+        if (data) setContactProfile(data as Profile);
       } catch (error: any) {
         console.error('Error fetching contact profile:', error);
         toast.error('Could not load contact information');
@@ -103,32 +103,54 @@ const ChatView: React.FC = () => {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `sender_id=eq.${contactId}`,
         },
         async (payload) => {
           const newMessage = payload.new as Message;
           
-          if (newMessage.receiver_id === user.id) {
-            // Mark message as read immediately
-            await supabase
-              .from('messages')
-              .update({ read: true })
-              .eq('id', newMessage.id);
-              
-            // Add the new message to the UI
-            setMessages(prev => [
-              ...prev,
-              {
-                id: newMessage.id,
-                content: newMessage.content,
-                sender: 'other',
-                timestamp: new Date(newMessage.created_at),
-                read: true,
-              },
-            ]);
+          // Only add messages that belong to this conversation
+          if ((newMessage.sender_id === user.id && newMessage.receiver_id === contactId) ||
+              (newMessage.sender_id === contactId && newMessage.receiver_id === user.id)) {
             
-            // Show notification if user is viewing this chat
-            toast.info(`${contactProfile?.username || 'Contact'} sent a message`);
+            // If the message is received from the contact, mark it as read
+            if (newMessage.sender_id === contactId && newMessage.receiver_id === user.id) {
+              // Mark message as read immediately since the user is viewing the chat
+              await supabase
+                .from('messages')
+                .update({ read: true })
+                .eq('id', newMessage.id);
+                
+              // Add the new message to the UI
+              setMessages(prev => [
+                ...prev,
+                {
+                  id: newMessage.id,
+                  content: newMessage.content,
+                  sender: 'other',
+                  timestamp: new Date(newMessage.created_at),
+                  read: true,
+                },
+              ]);
+              
+              // Show notification if user is viewing this chat
+              toast.info(`${contactProfile?.username || 'Contact'} sent a message`);
+            } else {
+              // Add the user's own message if it wasn't added already
+              if (!messages.some(msg => msg.id === newMessage.id)) {
+                setMessages(prev => [
+                  ...prev,
+                  {
+                    id: newMessage.id,
+                    content: newMessage.content,
+                    sender: 'user',
+                    timestamp: new Date(newMessage.created_at),
+                    read: newMessage.read,
+                  },
+                ]);
+              }
+            }
+
+            // Scroll to bottom immediately when new message arrives
+            setTimeout(scrollToBottom, 50);
           }
         }
       )
@@ -137,7 +159,7 @@ const ChatView: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [contactId, user]);
+  }, [contactId, user, messages]);
 
   // Mark messages as read when the component mounts and whenever the contact changes
   useEffect(() => {
@@ -174,27 +196,20 @@ const ChatView: React.FC = () => {
         
       if (error) throw error;
       
-      // Add message to UI
-      const newMessage: UIMessage = {
-        id: data?.id || '',
-        content,
-        sender: 'user',
-        timestamp: new Date(),
-        read: false,
-      };
-      
-      setMessages(prev => [...prev, newMessage]);
+      // Add message to UI is now handled by the subscription
       
       // Create notification for recipient
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: contactId,
-          type: 'message',
-          content: `New message from ${user.email}`,
-          related_user_id: user.id,
-          related_entity_id: data?.id,
-        });
+      if (data) {
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: contactId,
+            type: 'message',
+            content: `New message from ${user.email}`,
+            related_user_id: user.id,
+            related_entity_id: data.id,
+          });
+      }
         
     } catch (error: any) {
       console.error('Error sending message:', error);

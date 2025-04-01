@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { User, ArrowLeft, Save } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -49,10 +48,11 @@ const Customize: React.FC = () => {
           
         if (error) throw error;
         
-        setProfile(data);
+        const profileData = data as Profile;
+        setProfile(profileData);
         form.reset({
-          username: data.username || '',
-          status: data.status || '',
+          username: profileData.username || '',
+          status: profileData.status || '',
         });
       } catch (error) {
         console.error('Error fetching profile:', error);
