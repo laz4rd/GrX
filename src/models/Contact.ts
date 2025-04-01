@@ -1,53 +1,101 @@
-// Keep existing interfaces but update Message and add Database types
 
-export interface Contact {
-  id: string;
-  name: string;
-  status?: 'online' | 'offline' | 'away';
-  avatar?: string;
-  lastMessage?: string;
-  lastMessageTime?: Date;
-  unreadCount?: number;
-  bio?: string;
-  email?: string;
-}
-
-export interface Profile {
+export type Profile = {
   id: string;
   username: string;
   avatar_url?: string;
+  status?: string;
   updated_at?: string;
-}
+};
 
-export interface Message {
+export type Message = {
   id: string;
   sender_id: string;
   receiver_id: string;
   content: string;
   created_at: string;
   read: boolean;
-}
+};
 
-export interface Notification {
+export type Contact = {
+  id: string;
+  contact_id: string;
+  user_id: string;
+  created_at?: string;
+};
+
+export type Notification = {
   id: string;
   user_id: string;
   type: string;
   content: string;
-  is_read: boolean;
-  created_at: string;
+  created_at?: string;
+  is_read?: boolean;
   related_user_id?: string;
   related_entity_id?: string;
-}
+};
 
-// Database types mapped to Supabase schema
-export type Tables = {
-  profiles: Profile;
-  contacts: {
-    id: string;
-    user_id: string;
-    contact_id: string;
-    created_at?: string;
+export interface Database {
+  public: {
+    Tables: {
+      profiles: {
+        Row: Profile;
+        Insert: {
+          id: string;
+          username: string;
+          avatar_url?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          username?: string;
+          avatar_url?: string;
+          status?: string;
+          updated_at?: string;
+        };
+      };
+      messages: {
+        Row: Message;
+        Insert: {
+          sender_id: string;
+          receiver_id: string;
+          content: string;
+          read?: boolean;
+        };
+        Update: {
+          read?: boolean;
+        };
+      };
+      contacts: {
+        Row: Contact;
+        Insert: {
+          user_id: string;
+          contact_id: string;
+        };
+        Update: {
+          user_id?: string;
+          contact_id?: string;
+        };
+      };
+      notifications: {
+        Row: Notification;
+        Insert: {
+          user_id: string;
+          type: string;
+          content: string;
+          related_user_id?: string;
+          related_entity_id?: string;
+        };
+        Update: {
+          is_read?: boolean;
+        };
+      };
+    };
+    Views: {};
+    Functions: {};
+    Enums: {};
+    CompositeTypes: {};
   };
-  messages: Message;
-  notifications: Notification;
-}
+};
+
+export type Tables = Database['public']['Tables'];

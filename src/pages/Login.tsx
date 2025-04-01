@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Github, Smartphone, ArrowRight, User } from 'lucide-react';
+import { Github, Smartphone, ArrowRight, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,7 +28,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 type SignupFormValues = z.infer<typeof signupSchema>;
 
 const Login: React.FC = () => {
-  const { signIn, signUp, signInWithGoogle, signInWithGithub } = useAuth();
+  const { signIn, signUp, signInWithGithub } = useAuth();
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
 
@@ -53,29 +53,29 @@ const Login: React.FC = () => {
     try {
       await signIn(values.email, values.password);
       navigate('/contacts');
+      toast.success('Logged in successfully');
     } catch (error) {
       console.error('Login error:', error);
+      toast.error('Failed to log in. Please check your credentials.');
     }
   };
 
   const handleSignupSubmit = async (values: SignupFormValues) => {
     try {
       await signUp(values.email, values.password);
-      // Don't navigate automatically - user needs to verify email
-    } catch (error) {
+      toast.success('Account created! Please check your email to verify.');
+    } catch (error: any) {
       console.error('Signup error:', error);
+      toast.error(error.message || 'Failed to create account');
     }
   };
 
-  const handleOAuthLogin = async (provider: string) => {
+  const handleGithubLogin = async () => {
     try {
-      if (provider === 'google') {
-        await signInWithGoogle();
-      } else if (provider === 'github') {
-        await signInWithGithub();
-      }
+      await signInWithGithub();
     } catch (error) {
-      console.error(`${provider} login error:`, error);
+      console.error('GitHub login error:', error);
+      toast.error('Failed to login with GitHub');
     }
   };
 
@@ -108,6 +108,7 @@ const Login: React.FC = () => {
                     <FormLabel className="text-nothing-white">Email</FormLabel>
                     <FormControl>
                       <Input 
+                        type="email"
                         placeholder="your@email.com" 
                         className="bg-nothing-darkgray border-nothing-gray text-nothing-white"
                         {...field} 
@@ -157,6 +158,7 @@ const Login: React.FC = () => {
                     <FormLabel className="text-nothing-white">Email</FormLabel>
                     <FormControl>
                       <Input 
+                        type="email"
                         placeholder="your@email.com" 
                         className="bg-nothing-darkgray border-nothing-gray text-nothing-white"
                         {...field} 
@@ -228,15 +230,7 @@ const Login: React.FC = () => {
         <div className="space-y-4">
           <Button 
             className="w-full bg-nothing-darkgray hover:bg-nothing-gray text-nothing-white flex items-center justify-center gap-2 h-12 rounded-xl"
-            onClick={() => handleOAuthLogin('google')}
-          >
-            <Mail size={18} />
-            Continue with Google
-          </Button>
-          
-          <Button 
-            className="w-full bg-nothing-darkgray hover:bg-nothing-gray text-nothing-white flex items-center justify-center gap-2 h-12 rounded-xl"
-            onClick={() => handleOAuthLogin('github')}
+            onClick={handleGithubLogin}
           >
             <Github size={18} />
             Continue with GitHub

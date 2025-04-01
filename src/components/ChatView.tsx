@@ -23,6 +23,24 @@ const ChatView: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Mark all messages from this contact as read
+  const markMessagesAsRead = async () => {
+    if (!user || !contactId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ read: true })
+        .eq('sender_id', contactId)
+        .eq('receiver_id', user.id)
+        .eq('read', false);
+        
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
+
   useEffect(() => {
     if (!contactId || !user) return;
 
@@ -64,17 +82,8 @@ const ChatView: React.FC = () => {
           
           setMessages(formattedMessages);
           
-          // Mark messages as read
-          const unreadMessageIds = data
-            .filter((msg: Message) => !msg.read && msg.receiver_id === user.id)
-            .map((msg: Message) => msg.id);
-            
-          if (unreadMessageIds.length > 0) {
-            await supabase
-              .from('messages')
-              .update({ read: true })
-              .in('id', unreadMessageIds);
-          }
+          // Mark messages as read when the chat is opened
+          await markMessagesAsRead();
         }
       } catch (error: any) {
         console.error('Error fetching messages:', error);
@@ -106,6 +115,7 @@ const ChatView: React.FC = () => {
               .update({ read: true })
               .eq('id', newMessage.id);
               
+            // Add the new message to the UI
             setMessages(prev => [
               ...prev,
               {
@@ -116,6 +126,9 @@ const ChatView: React.FC = () => {
                 read: true,
               },
             ]);
+            
+            // Show notification if user is viewing this chat
+            toast.info(`${contactProfile?.username || 'Contact'} sent a message`);
           }
         }
       )
@@ -124,6 +137,13 @@ const ChatView: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [contactId, user]);
+
+  // Mark messages as read when the component mounts and whenever the contact changes
+  useEffect(() => {
+    if (contactId && user) {
+      markMessagesAsRead();
+    }
   }, [contactId, user]);
 
   useEffect(() => {
@@ -186,7 +206,7 @@ const ChatView: React.FC = () => {
     <div className="flex flex-col h-screen max-h-screen bg-nothing-black overflow-hidden dot-matrix">
       <ChatHeader 
         name={contactProfile?.username || 'Loading...'}
-        status={contactProfile ? 'online' : 'offline'}
+        status={contactProfile?.status || 'offline'}
         onBack={handleBack}
       />
       

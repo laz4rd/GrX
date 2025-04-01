@@ -10,6 +10,7 @@ import SplashScreen from "./components/SplashScreen";
 import Login from "./pages/Login";
 import Contacts from "./pages/Contacts";
 import ChatView from "./components/ChatView";
+import Customize from "./pages/Customize";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -28,6 +29,11 @@ const App = () => (
             <Route path="/contacts" element={
               <ProtectedRoute>
                 <Contacts />
+              </ProtectedRoute>
+            } />
+            <Route path="/customize" element={
+              <ProtectedRoute>
+                <Customize />
               </ProtectedRoute>
             } />
             <Route path="/chat/:contactId" element={
