@@ -8,7 +8,7 @@ import TypingIndicator from './TypingIndicator';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Message, Profile } from '@/models/Contact';
+import { Message, Profile, Tables } from '@/models/Contact';
 
 const ChatView: React.FC = () => {
   const [messages, setMessages] = useState<UIMessage[]>([]);
@@ -156,7 +156,7 @@ const ChatView: React.FC = () => {
       
       // Add message to UI
       const newMessage: UIMessage = {
-        id: data.id,
+        id: data?.id || '',
         content,
         sender: 'user',
         timestamp: new Date(),
@@ -173,7 +173,7 @@ const ChatView: React.FC = () => {
           type: 'message',
           content: `New message from ${user.email}`,
           related_user_id: user.id,
-          related_entity_id: data.id,
+          related_entity_id: data?.id,
         });
         
     } catch (error: any) {

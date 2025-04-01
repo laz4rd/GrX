@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Contact, Profile } from '@/models/Contact';
+import { Contact, Profile, Tables } from '@/models/Contact';
 import { Button } from '@/components/ui/button';
 import { Plus, User, Search, LogOut, MoreVertical } from 'lucide-react';
 import { Input } from '@/components/ui/input';

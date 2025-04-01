@@ -1,3 +1,4 @@
+// Keep existing interfaces but update Message and add Database types
 
 export interface Contact {
   id: string;
@@ -36,4 +37,17 @@ export interface Notification {
   created_at: string;
   related_user_id?: string;
   related_entity_id?: string;
+}
+
+// Database types mapped to Supabase schema
+export type Tables = {
+  profiles: Profile;
+  contacts: {
+    id: string;
+    user_id: string;
+    contact_id: string;
+    created_at?: string;
+  };
+  messages: Message;
+  notifications: Notification;
 }
