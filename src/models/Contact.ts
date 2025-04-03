@@ -1,3 +1,4 @@
+
 export type Profile = {
   id: string;
   username: string;
@@ -31,7 +32,6 @@ export type Notification = {
   created_at?: string;
   is_read?: boolean;
   related_user_id?: string;
-  related_entity_id?: string;
   related_entity_id?: string;
 };
 
