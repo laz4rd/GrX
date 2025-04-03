@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ChatHeader from './ChatHeader';
@@ -221,7 +220,7 @@ const ChatView: React.FC = () => {
     <div className="flex flex-col h-screen max-h-screen bg-nothing-black overflow-hidden dot-matrix">
       <ChatHeader 
         name={contactProfile?.username || 'Loading...'}
-        status={contactProfile?.status || 'offline'}
+        status={contactProfile?.status || 'No status'}
         onBack={handleBack}
       />
       

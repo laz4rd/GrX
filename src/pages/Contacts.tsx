@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -253,10 +254,14 @@ const Contacts = () => {
                 onClick={() => navigate(`/chat/${contact.contact_id}`)}
               >
                 <Avatar className="mr-4">
-                  <AvatarImage src={contact.profile.avatar_url || ''} />
-                  <AvatarFallback>{contact.profile.username.charAt(0).toUpperCase()}</AvatarFallback>
+                  <AvatarFallback />
                 </Avatar>
-                <span>{contact.profile.username}</span>
+                <div className="flex flex-col items-start">
+                  <span>{contact.profile.username}</span>
+                  <span className="text-xs text-nothing-lightgray">
+                    {contact.profile.status || 'No status'}
+                  </span>
+                </div>
               </Button>
             ))
           ) : search ? (
