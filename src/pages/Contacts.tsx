@@ -14,7 +14,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Edit, User } from 'lucide-react';
+import { LogOut, Edit, User, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Profile } from '@/models/Contact';
@@ -30,8 +30,10 @@ interface ContactWithProfile {
 const Contacts = () => {
   const [contacts, setContacts] = useState<ContactWithProfile[]>([]);
   const [search, setSearch] = useState('');
-  const [showAddContact, setShowAddContact] = useState(false);
-  const [newContactEmail, setNewContactEmail] = useState('');
+  const [showSearchContacts, setShowSearchContacts] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Profile[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -130,38 +132,43 @@ const Contacts = () => {
     setSearch(e.target.value);
   };
 
-  const handleAddContact = async () => {
+  const handleSearchContacts = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
     try {
-      // First, find the profile by email
-      const { data: profileData, error: profileError } = await supabase
+      setIsSearching(true);
+      // Search for profiles that match the query (case insensitive)
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('username', newContactEmail)
-        .single();
+        .ilike('username', `%${searchQuery}%`)
+        .neq('id', user?.id) // Exclude current user
+        .limit(10);
 
-      if (profileError) {
-        if (profileError.code === 'PGRST116') {
-          toast.error('User with this email or username not found.');
-        } else {
-          throw profileError;
-        }
-        return;
-      }
+      if (error) throw error;
 
-      const newProfile = profileData as Profile;
+      // Filter out contacts that are already in the user's contacts
+      const filteredResults = data.filter(profile => 
+        !contacts.some(contact => contact.contact_id === profile.id)
+      );
+      
+      setSearchResults(filteredResults);
+    } catch (error: any) {
+      console.error('Error searching profiles:', error);
+      toast.error('Error searching for contacts');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
-      if (!newProfile) {
-        toast.error('User with this email or username not found.');
-        return;
-      }
-
-      if (newProfile.id === user?.id) {
-        toast.error('You can\'t add yourself as a contact.');
-        return;
-      }
-
+  const handleAddContact = async (profileId: string) => {
+    try {
+      // Check if contact already exists
       const existingContact = contacts.find(
-        contact => contact.contact_id === newProfile.id
+        contact => contact.contact_id === profileId
       );
 
       if (existingContact) {
@@ -169,18 +176,19 @@ const Contacts = () => {
         return;
       }
 
+      // Add contact
       const { error } = await supabase.from('contacts').insert([
         {
           user_id: user?.id,
-          contact_id: newProfile.id,
+          contact_id: profileId,
         },
       ]);
 
       if (error) throw error;
 
       toast.success('Contact added successfully!');
-      setNewContactEmail('');
-      setShowAddContact(false);
+      setSearchQuery('');
+      setShowSearchContacts(false);
       fetchContacts();
     } catch (error: any) {
       console.error('Error adding contact:', error);
@@ -219,9 +227,9 @@ const Contacts = () => {
           <Button
             variant="ghost"
             className="text-nothing-white ml-2"
-            onClick={() => setShowAddContact(true)}
+            onClick={() => setShowSearchContacts(true)}
           >
-            <Edit size={20} />
+            <Search size={20} />
           </Button>
           <Button
             variant="ghost"
@@ -270,40 +278,68 @@ const Contacts = () => {
             </div>
           ) : (
             <div className="text-center p-4 text-nothing-white">
-              You have no contacts yet. Add contacts using the edit button.
+              You have no contacts yet. Search for contacts using the search button.
             </div>
           )}
         </div>
       </div>
 
-      <Dialog open={showAddContact} onOpenChange={setShowAddContact}>
+      <Dialog open={showSearchContacts} onOpenChange={setShowSearchContacts}>
         <DialogContent className="bg-nothing-black border-nothing-darkgray text-nothing-white">
           <DialogHeader>
-            <DialogTitle>Add New Contact</DialogTitle>
+            <DialogTitle>Search for Contacts</DialogTitle>
             <DialogDescription>
-              Enter the username of the user you want to add as a contact.
+              Search for users by username to add them to your contacts.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="username" className="text-right">
-                Username
-              </Label>
+            <div className="flex items-center gap-2">
               <Input
                 type="text"
-                id="username"
-                value={newContactEmail}
-                onChange={e => setNewContactEmail(e.target.value)}
-                className="col-span-3 bg-nothing-darkgray border-nothing-gray text-nothing-white"
+                id="searchQuery"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="bg-nothing-darkgray border-nothing-gray text-nothing-white flex-1"
+                placeholder="Enter username to search"
               />
+              <Button onClick={handleSearchContacts} disabled={isSearching}>
+                {isSearching ? 'Searching...' : 'Search'}
+              </Button>
             </div>
+            
+            {searchResults.length > 0 ? (
+              <div className="max-h-60 overflow-y-auto border border-nothing-darkgray rounded-md">
+                {searchResults.map(profile => (
+                  <div 
+                    key={profile.id} 
+                    className="p-2 flex items-center justify-between hover:bg-nothing-darkgray border-b border-nothing-darkgray last:border-b-0"
+                  >
+                    <div className="flex items-center">
+                      <Avatar className="mr-2">
+                        <AvatarFallback />
+                      </Avatar>
+                      <div>
+                        <p className="text-nothing-white">{profile.username}</p>
+                        <p className="text-xs text-nothing-lightgray">{profile.status || 'No status'}</p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      className="text-nothing-white hover:bg-nothing-gray" 
+                      onClick={() => handleAddContact(profile.id)}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : searchQuery && !isSearching ? (
+              <p className="text-nothing-lightgray text-center p-4">No users found matching "{searchQuery}"</p>
+            ) : null}
           </div>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setShowAddContact(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" onClick={handleAddContact}>
-              Add Contact
+            <Button variant="secondary" onClick={() => setShowSearchContacts(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
