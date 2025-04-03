@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -90,7 +89,7 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-nothing-white text-4xl font-bold mb-2 tracking-tighter">
-            Shvik<span className="text-nothing-red">.</span>
+            GrX<span className="text-nothing-red">.</span>
           </h1>
           <p className="text-nothing-lightgray text-sm mt-2 mb-8">
             {isLogin ? 'sign in to continue' : 'create an account'}
