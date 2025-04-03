@@ -1,10 +1,10 @@
-
 export type Profile = {
   id: string;
   username: string;
   avatar_url?: string;
   status?: string;
   updated_at?: string;
+  show_dot_matrix?: boolean;
 };
 
 export type Message = {
@@ -31,6 +31,7 @@ export type Notification = {
   created_at?: string;
   is_read?: boolean;
   related_user_id?: string;
+  related_entity_id?: string;
   related_entity_id?: string;
 };
 

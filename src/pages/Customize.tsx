@@ -12,10 +12,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Profile } from '@/models/Contact';
+import { Switch } from '@/components/ui/switch';
 
 const customizeSchema = z.object({
   username: z.string().min(2, { message: 'Username must be at least 2 characters' }),
   status: z.string().optional(),
+  showDotMatrix: z.boolean().default(true),
 });
 
 type CustomizeFormValues = z.infer<typeof customizeSchema>;
@@ -31,6 +33,7 @@ const Customize: React.FC = () => {
     defaultValues: {
       username: '',
       status: '',
+      showDotMatrix: true,
     },
   });
 
@@ -50,9 +53,12 @@ const Customize: React.FC = () => {
         
         const profileData = data as Profile;
         setProfile(profileData);
+        
+        // Set the form values, including the dot matrix preference if it exists
         form.reset({
           username: profileData.username || '',
           status: profileData.status || '',
+          showDotMatrix: profileData.show_dot_matrix !== undefined ? profileData.show_dot_matrix : true,
         });
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -76,6 +82,7 @@ const Customize: React.FC = () => {
         .update({
           username: values.username,
           status: values.status,
+          show_dot_matrix: values.showDotMatrix,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
@@ -92,8 +99,11 @@ const Customize: React.FC = () => {
     }
   };
 
+  // Apply background style based on the form value
+  const backgroundClass = form.watch('showDotMatrix') ? 'dot-matrix' : '';
+
   return (
-    <div className="h-screen w-screen flex flex-col bg-nothing-black dot-matrix">
+    <div className={`h-screen w-screen flex flex-col bg-nothing-black ${backgroundClass}`}>
       <div className="flex items-center p-4 border-b border-nothing-darkgray">
         <Button 
           variant="ghost" 
@@ -142,6 +152,25 @@ const Customize: React.FC = () => {
                       />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="showDotMatrix"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border border-nothing-darkgray p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-nothing-white">Dotted Background</FormLabel>
+                      <FormMessage />
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
                   </FormItem>
                 )}
               />
